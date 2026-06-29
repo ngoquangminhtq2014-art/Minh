@@ -1,0 +1,238 @@
+-- ==========================================
+--    MINHDZ PREMIUM - FAKE LAG EDITION
+-- ==========================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local originalMaterials = {}
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+   Name = "⚡ MINHDZ PREMIUM ⚡",
+   LoadingTitle = "Loading PREMIUM Assets...",
+   LoadingSubtitle = "by Minh",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false,
+})
+
+local MainTab = Window:CreateTab("Movement", 4483362458)
+local VisualsTab = Window:CreateTab("Visuals & Misc", 4483362458)
+local SettingsTab = Window:CreateTab("Performance & System", 4483362458)
+
+-- Variables
+local noclipEnabled = false
+local flyEnabled = false
+local flySpeed = 50
+local espEnabled = false
+local xrayEnabled = false
+local clickTeleportEnabled = false
+
+-- Fake Lag Variables
+local fakeLagEnabled = false
+local fakeLagLimit = 0.2 -- Frozen position interval (seconds)
+
+-- ==========================================
+-- MOVEMENT TAB
+-- ==========================================
+
+MainTab:CreateSlider({
+   Name = "Flight Speed",
+   Range = {16, 300},
+   Increment = 5,
+   CurrentValue = 50,
+   Callback = function(Value) flySpeed = Value end,
+})
+
+MainTab:CreateToggle({
+   Name = "Fly Mode (Jump to Ascend)",
+   Callback = function(Value)
+      flyEnabled = Value
+      local char = LocalPlayer.Character
+      local hrp = char and char:FindFirstChild("HumanoidRootPart")
+      local hum = char and char:FindFirstChildOfClass("Humanoid")
+      if not hrp or not hum then return end
+      
+      if flyEnabled then
+         hum.PlatformStand = true
+         local bv = Instance.new("BodyVelocity", hrp); bv.Name = "FlyVel"; bv.MaxForce = Vector3.new(1/0, 1/0, 1/0)
+         local bg = Instance.new("BodyGyro", hrp); bg.Name = "FlyGyro"; bg.MaxTorque = Vector3.new(1/0, 1/0, 1/0); bg.CFrame = hrp.CFrame
+         
+         RunService.RenderStepped:Connect(function()
+            if not flyEnabled or not hrp or not hum then return end
+            local moveDir = hum.MoveDirection
+            local upForce = (UserInputService:IsKeyDown(Enum.KeyCode.Space) or hum.Jump) and flySpeed or 0
+            bv.Velocity = (moveDir * flySpeed) + Vector3.new(0, upForce, 0)
+            bg.CFrame = Camera.CFrame
+         end)
+      else
+         if hrp then
+            if hrp:FindFirstChild("FlyVel") then hrp.FlyVel:Destroy() end
+            if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+         end
+         hum.PlatformStand = false
+      end
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Noclip (Wall Hack)",
+   Callback = function(Value) noclipEnabled = Value end,
+})
+
+-- FAKE LAG FEATURE
+MainTab:CreateToggle({
+   Name = "Fake Lag (Desync Positioning)",
+   Callback = function(Value)
+      fakeLagEnabled = Value
+      if fakeLagEnabled then
+         task.spawn(function()
+            while fakeLagEnabled do
+               local char = LocalPlayer.Character
+               local hrp = char and char:FindFirstChild("HumanoidRootPart")
+               if hrp then
+                  -- Briefly freeze network replication by anchoring local root part
+                  hrp.Anchored = true
+                  task.wait(fakeLagLimit)
+                  hrp.Anchored = false
+               end
+               task.wait(0.01) -- Recovery delay
+            end
+         end)
+      else
+         local char = LocalPlayer.Character
+         local hrp = char and char:FindFirstChild("HumanoidRootPart")
+         if hrp then hrp.Anchored = false end
+      end
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "Fake Lag Intensity",
+   Range = {1, 5},
+   Increment = 1,
+   CurrentValue = 2,
+   Callback = function(Value)
+      fakeLagLimit = Value * 0.1 -- Converts value to seconds (e.g. Level 2 = 0.2s)
+   end,
+})
+
+RunService.Stepped:Connect(function()
+   if noclipEnabled and LocalPlayer.Character then
+      for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+         if part:IsA("BasePart") then part.CanCollide = false end
+      end
+   end
+end)
+
+-- ==========================================
+-- VISUALS TAB
+-- ==========================================
+
+local function createESP(player)
+   if player == LocalPlayer then return end
+   local function applyHighlight(character)
+      if character:FindFirstChild("ESPHighlight") then return end
+      local highlight = Instance.new("Highlight")
+      highlight.Name = "ESPHighlight"
+      highlight.FillColor = Color3.fromRGB(255, 0, 0)
+      highlight.FillTransparency = 0.4
+      highlight.Enabled = espEnabled
+      highlight.Parent = character
+   end
+   if player.Character then applyHighlight(player.Character) end
+   player.CharacterAdded:Connect(applyHighlight)
+end
+
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+
+VisualsTab:CreateToggle({
+   Name = "Player ESP (Chams)",
+   Callback = function(Value)
+      espEnabled = Value
+      for _, p in pairs(Players:GetPlayers()) do
+         if p.Character and p.Character:FindFirstChild("ESPHighlight") then
+            p.Character.ESPHighlight.Enabled = espEnabled
+         end
+      end
+   end,
+})
+
+VisualsTab:CreateToggle({
+   Name = "X-Ray Mode (Map Transparency)",
+   Callback = function(Value)
+      xrayEnabled = Value
+      if xrayEnabled then
+         for _, object in pairs(workspace:GetDescendants()) do
+            if object:IsA("BasePart") and not object:IsDescendantOf(LocalPlayer.Character) and not Players:GetPlayerFromCharacter(object.Parent) then
+               originalMaterials[object] = object.Transparency
+               object.Transparency = 0.6
+            end
+         end
+      else
+         for object, original in pairs(originalMaterials) do
+            if object and object.Parent then object.Transparency = original end
+         end
+         table.clear(originalMaterials)
+      end
+   end,
+})
+
+VisualsTab:CreateToggle({
+   Name = "Click to Teleport",
+   Callback = function(Value)
+      clickTeleportEnabled = Value
+   end,
+})
+
+UserInputService.InputBegan:Connect(function(input, processed)
+   if processed then return end
+   if clickTeleportEnabled and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+      local mouse = LocalPlayer:GetMouse()
+      if mouse.Target and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+         LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.p + Vector3.new(0, 3, 0))
+      end
+   end
+end)
+
+-- ==========================================
+-- PERFORMANCE TAB (OPTIMIZATION)
+-- ==========================================
+
+SettingsTab:CreateButton({
+   Name = "🚀 Activate Lag Fixer (FPS Boost)",
+   Callback = function()
+      -- Optimize global environmental lighting & shadows
+      Lighting.GlobalShadows = false
+      Lighting.FogEnd = 9e9
+      Lighting.ShadowSoftness = 0
+      
+      for _, effect in pairs(Lighting:GetChildren()) do
+         if effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") then
+            effect.Enabled = false
+         end
+      end
+
+      -- Downgrade rendering materials & terminate intensive engine particles
+      for _, v in pairs(workspace:GetDescendants()) do
+         if v:IsA("BasePart") and not v:IsDescendantOf(LocalPlayer.Character) then
+            v.Material = Enum.Material.SmoothPlastic
+         elseif v:IsA("ParticleEmitter") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+            v.Enabled = false
+         end
+      end
+      
+      Rayfield:Notify({
+         Title = "⚡ PREMIUM Boost",
+         Content = "Graphics optimized successfully! FPS has been accelerated.",
+         Duration = 4
+      })
+   end,
+})
+
+Rayfield:Notify({Title = "⚡ MINHDZ PREMIUM ⚡", Content = "Premium utility configurations loaded successfully.", Duration = 5})
