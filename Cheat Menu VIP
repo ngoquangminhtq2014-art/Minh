@@ -1,0 +1,519 @@
+-- [[ TẢI THƯ VIỆN RAYFIELD UI ]]
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- [[ KHỞI TẠO CỬA SỔ CHÍNH ]]
+local Window = Rayfield:CreateWindow({
+   Name = "🔥 Cheat Menu VIP 🔥",
+   LoadingTitle = "Đang tải Giao Diện...",
+   LoadingSubtitle = "by MINH và Gemini AI",
+   ConfigurationSaving = {
+      Enabled = false,
+      FolderName = nil,
+      FileName = "BigHub"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false 
+})
+
+-- [[ CÁC BIẾN CẤU HÌNH MẶC ĐỊNH ]]
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Biến cấu hình cũ
+local WalkSpeedEnabled = false
+local WalkSpeedValue = 16
+local JumpPowerEnabled = false
+local JumpPowerValue = 50
+local GravityDefault = 196.2
+local noclip = false
+local espEnabled = false
+local InfiniteJump = false
+local TargetPlayerName = ""
+local xrayEnabled = false
+local originalTransparencies = {}
+
+-- Biến cấu hình Target Fling mới
+local flingTargetName = ""
+local flingActive = false
+local originalPos = nil
+
+-- [[ CÁC TAB CHỨC NĂNG ]]
+local MainTab = Window:CreateTab("Chức Năng", 4483362458)
+local TeleportTab = Window:CreateTab("Dịch Chuyển", 4483362458)
+local TrollTab = Window:CreateTab("Troll Fling", 4483362458)
+
+-- =============================================================
+-- [TAB CHỨC NĂNG]
+-- =============================================================
+
+MainTab:CreateToggle({
+   Name = "Kích Hoạt Tốc Độ Tùy Chỉnh",
+   CurrentValue = false,
+   Flag = "WalkSpeedToggle",
+   Callback = function(Value)
+      WalkSpeedEnabled = Value
+      if not Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.WalkSpeed = 16
+      end
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "Tốc Độ Di Chuyển",
+   Range = {16, 500},
+   Increment = 1,
+   CurrentValue = 16,
+   Flag = "WalkSpeedSlider",
+   Callback = function(Value) WalkSpeedValue = Value end,
+})
+
+MainTab:CreateToggle({
+   Name = "Kích Hoạt Nhảy Cao Tùy Chỉnh",
+   CurrentValue = false,
+   Flag = "JumpPowerToggle",
+   Callback = function(Value)
+      JumpPowerEnabled = Value
+      if not Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+         LocalPlayer.Character.Humanoid.JumpPower = 50
+      end
+   end,
+})
+
+MainTab:CreateSlider({
+   Name = "Độ Cao Nhảy",
+   Range = {50, 500},
+   Increment = 1,
+   CurrentValue = 50,
+   Flag = "JumpPowerSlider",
+   Callback = function(Value) JumpPowerValue = Value end,
+})
+
+MainTab:CreateToggle({
+   Name = "Bật Nhảy Vô Hạn (Infinite Jump)",
+   CurrentValue = false,
+   Flag = "InfJumpToggle",
+   Callback = function(Value) InfiniteJump = Value end,
+})
+
+UserInputService.JumpRequest:Connect(function()
+   if InfiniteJump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+      LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+   end
+end)
+
+task.spawn(function()
+   while task.wait(0.1) do
+      pcall(function()
+         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            local hum = LocalPlayer.Character.Humanoid
+            if WalkSpeedEnabled then
+               if hum.WalkSpeed ~= WalkSpeedValue then hum.WalkSpeed = WalkSpeedValue end
+            end
+            if JumpPowerEnabled then
+               hum.UseJumpPower = true
+               if hum.JumpPower ~= JumpPowerValue then hum.JumpPower = JumpPowerValue end
+            end
+         end
+      end)
+   end
+end)
+
+-- SKELETON ESP
+local espCache = {}
+local BonePairs = {
+   {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+   {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+   {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+   {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+   {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
+   {"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+   {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+}
+
+local function ClearESPForPlayer(player)
+   if espCache[player] then
+      if espCache[player].Connection then espCache[player].Connection:Disconnect() end
+      if espCache[player].Lines then
+         for _, line in pairs(espCache[player].Lines) do line:Destroy() end
+      end
+      espCache[player] = nil
+   end
+end
+
+local function TrackESP(player)
+   if player == LocalPlayer then return end
+   ClearESPForPlayer(player)
+
+   local lines = {}
+   for i = 1, #BonePairs do
+      local line = Drawing.new("Line")
+      line.Color = Color3.fromRGB(0, 255, 0)
+      line.Thickness = 1.5
+      line.Visible = false
+      table.insert(lines, line)
+   end
+
+   local connection
+   connection = RunService.RenderStepped:Connect(function()
+      if not espEnabled or not player.Parent then
+         for _, line in pairs(lines) do line.Visible = false end
+         if not espEnabled and connection then 
+            connection:Disconnect()
+         end
+         return
+      end
+
+      local char = player.Character
+      local hum = char and char:FindFirstChild("Humanoid")
+      
+      if char and hum and hum.Health > 0 then
+         local lineIndex = 1
+         for _, pair in pairs(BonePairs) do
+            local part1 = char:FindFirstChild(pair[1])
+            local part2 = char:FindFirstChild(pair[2])
+            if part1 and part2 then
+               local pos1, onScreen1 = Camera:WorldToViewportPoint(part1.Position)
+               local pos2, onScreen2 = Camera:WorldToViewportPoint(part2.Position)
+               if onScreen1 and onScreen2 then
+                  local currentLine = lines[lineIndex]
+                  if currentLine then
+                     currentLine.From = Vector2.new(pos1.X, pos1.Y)
+                     currentLine.To = Vector2.new(pos2.X, pos2.Y)
+                     currentLine.Visible = true
+                     lineIndex = lineIndex + 1
+                  end
+               end
+            end
+         end
+         for i = lineIndex, #lines do lines[i].Visible = false end
+      else
+         for _, line in pairs(lines) do line.Visible = false end
+      end
+   end)
+
+   espCache[player] = {Lines = lines, Connection = connection}
+end
+
+MainTab:CreateToggle({
+   Name = "Bật ESP Khung Xương (Skeleton)",
+   CurrentValue = false,
+   Flag = "ESPToggle",
+   Callback = function(Value)
+      espEnabled = Value
+      if Value then
+         for _, p in pairs(Players:GetPlayers()) do TrackESP(p) end
+      else
+         for _, target in pairs(espCache) do
+            if target.Lines then
+               for _, line in pairs(target.Lines) do line.Visible = false end
+            end
+         end
+      end
+   end,
+})
+
+Players.PlayerAdded:Connect(function(p) if espEnabled then TrackESP(p) end end)
+Players.PlayerRemoving:Connect(ClearESPForPlayer)
+
+MainTab:CreateToggle({
+   Name = "Bật X-Ray Nhìn Xuyên Tường",
+   CurrentValue = false,
+   Flag = "RealXrayToggle",
+   Callback = function(Value)
+      xrayEnabled = Value
+      if Value then
+         for _, v in pairs(Workspace:GetDescendants()) do
+            if v:IsA("BasePart") and not v:IsDescendantOf(LocalPlayer.Character) and not Players:GetPlayerFromCharacter(v.Parent) then
+               if not originalTransparencies[v] then originalTransparencies[v] = v.Transparency end
+               v.Transparency = 0.5
+            end
+         end
+      else
+         for part, originalValue in pairs(originalTransparencies) do
+            if part and part.Parent then part.Transparency = originalValue end
+         end
+         originalTransparencies = {}
+      end
+   end,
+})
+
+Workspace.DescendantAdded:Connect(function(v)
+   if xrayEnabled and v:IsA("BasePart") and not v:IsDescendantOf(LocalPlayer.Character) and not Players:GetPlayerFromCharacter(v.Parent) then
+      if not originalTransparencies[v] then originalTransparencies[v] = v.Transparency end
+      v.Transparency = 0.5
+   end
+end)
+
+MainTab:CreateToggle({
+   Name = "Bật Noclip (Xuyên Tường)",
+   CurrentValue = false,
+   Flag = "NoclipToggle",
+   Callback = function(Value) noclip = Value end,
+})
+
+RunService.Stepped:Connect(function()
+   if (noclip or flingActive) and LocalPlayer.Character then
+      pcall(function()
+         for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then part.CanCollide = false end
+         end
+      end)
+   end
+end)
+
+MainTab:CreateToggle({
+   Name = "Bật Trọng Lực Thấp (Low Gravity)",
+   CurrentValue = false,
+   Flag = "GravityToggle",
+   Callback = function(Value) Workspace.Gravity = Value and 35 or GravityDefault end
+})
+
+
+-- =============================================================
+-- [TAB TROLL FLING] -> PHIÊN BẢN CẢI TIẾN KHÔNG DÍNH NGƯỜI
+-- =============================================================
+
+local FlingDropdown = TrollTab:CreateDropdown({
+   Name = "Chọn Mục Tiêu Muốn Fling",
+   Options = {"Đang tải..."},
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "FlingTargetDropdown",
+   Callback = function(Option)
+      if Option[1] and Option[1] ~= "" and Option[1] ~= "Đang tải..." then
+         flingTargetName = Option[1]
+      end
+   end,
+})
+
+local lastFlingCount = 0
+local function UpdateFlingDropdown()
+   local currentPlayers = Players:GetPlayers()
+   if #currentPlayers == lastFlingCount then return end
+   lastFlingCount = #currentPlayers
+
+   local tbl = {}
+   for _, p in pairs(currentPlayers) do
+      if p ~= LocalPlayer then table.insert(tbl, p.Name) end
+   end
+   FlingDropdown:Refresh(tbl, true)
+end
+
+task.spawn(function()
+   while task.wait(3) do UpdateFlingDropdown() end
+end)
+
+local TargetFlingToggle
+
+TargetFlingToggle = TrollTab:CreateToggle({
+   Name = "KÍCH HOẠT FLING TO TARGET",
+   CurrentValue = false,
+   Flag = "TargetFlingToggle",
+   Callback = function(Value)
+      flingActive = Value
+      
+      local char = LocalPlayer.Character
+      local hrp = char and char:FindFirstChild("HumanoidRootPart")
+      local hum = char and char:FindFirstChildOfClass("Humanoid")
+      
+      if flingActive then
+         local targetPlayer = Players:FindFirstChild(flingTargetName)
+         
+         if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            Rayfield:Notify({Title = "Thất Bại", Content = "Vui lòng chọn mục tiêu hợp lệ trước!", Duration = 3})
+            flingActive = false
+            task.spawn(function() TargetFlingToggle:Set(false) end)
+            return
+         end
+         
+         if hrp then
+            originalPos = hrp.CFrame
+            Rayfield:Notify({Title = "Đang Fling", Content = "Đang quét xung lực gián tiếp...", Duration = 2})
+            
+            if hum then 
+               hum.PlatformStand = true 
+            end
+
+            task.spawn(function()
+               -- Thiết lập lực xoay cực đại phá vỡ tính toán vị trí hệ thống
+               local bV = Instance.new("AngularVelocity")
+               bV.Name = "IY_MaxFlingVelocity"
+               bV.MaxTorque = math.huge
+               bV.AngularVelocity = Vector3.new(0, 999999, 0)
+               bV.Attachment0 = hrp:FindFirstChildOfClass("Attachment") or Instance.new("Attachment", hrp)
+               bV.Parent = hrp
+
+               local bG = Instance.new("BodyGyro")
+               bG.Name = "IY_MaxFlingGyro"
+               bG.MaxTorque = Vector3.new(1e7, 1e7, 1e7)
+               bG.P = 3000
+               bG.Parent = hrp
+
+               -- Đếm thời gian để ngắt ép sát (giữ khoảng cách, không lạm dụng dính người)
+               local startTime = os.clock()
+
+               while flingActive and char and hrp.Parent and targetPlayer.Parent and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") do
+                  RunService.Heartbeat:Wait()
+                  
+                  local targetHRP = targetPlayer.Character.HumanoidRootPart
+                  local targetHum = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+                  
+                  -- Điều kiện ngừng: Khi đối thủ chết, văng đi xa hoặc quá thời gian xử lý nhanh (1.5 giây)
+                  if (targetHum and targetHum.Health <= 0) or (os.clock() - startTime > 1.5) then 
+                     break 
+                  end
+                  
+                  -- GHOST FLING: Chỉ lướt ngang cắt góc hoặc đập nhẹ chứ không dính chặt tâm hình học
+                  local function getFlingCFrame()
+                     return targetHRP.CFrame * CFrame.new(math.random(-1, 1), 0, math.random(-1, 1)) * CFrame.Angles(math.rad(math.random(-20,20)), math.rad(math.random(-20,20)), math.rad(math.random(-20,20)))
+                  end
+                  
+                  hrp.CFrame = getFlingCFrame()
+                  bG.CFrame = getFlingCFrame()
+
+                  hrp.Velocity = Vector3.new(65000, 65000, 65000)
+                  hrp.RotVelocity = Vector3.new(0, 65000, 0)
+               end
+               
+               -- NGAY LẬP TỨC THU HỒI LỰC VÀ GIẬT VỀ TRÁI ĐẤT CŨ
+               flingActive = false
+               if bV then bV:Destroy() end
+               if bG then bG:Destroy() end
+               if hum then hum.PlatformStand = false end
+               
+               if hrp and originalPos then
+                  hrp.Velocity = Vector3.new(0,0,0)
+                  hrp.RotVelocity = Vector3.new(0,0,0)
+                  task.wait(0.1)
+                  hrp.CFrame = originalPos
+                  Rayfield:Notify({Title = "Thành Công!", Content = "Đã thu hồi vị trí gốc an toàn.", Duration = 3})
+               end
+
+               -- Đặt nút gạt UI về trạng thái Off
+               TargetFlingToggle:Set(false)
+            end)
+         end
+      else
+         flingActive = false
+         if hum then hum.PlatformStand = false end
+         if hrp then
+            if hrp:FindFirstChild("IY_MaxFlingVelocity") then hrp.IY_MaxFlingVelocity:Destroy() end
+            if hrp:FindFirstChild("IY_MaxFlingGyro") then hrp.IY_MaxFlingGyro:Destroy() end
+            hrp.Velocity = Vector3.new(0,0,0)
+            hrp.RotVelocity = Vector3.new(0,0,0)
+            if originalPos then
+               task.wait(0.1)
+               hrp.CFrame = originalPos
+            end
+         end
+      end
+   end,
+})
+
+
+-- =============================================================
+-- [TAB DỊCH CHUYỂN - TELEPORT]
+-- =============================================================
+
+local function GetPlayerByString(str)
+   str = str:lower()
+   for _, p in pairs(Players:GetPlayers()) do
+      if p.Name:lower():sub(1, #str) == str or p.DisplayName:lower():sub(1, #str) == str then return p end
+   end
+   return nil
+end
+
+local function TeleportToPlayer(targetPlr)
+   if targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") then
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+         LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
+         Rayfield:Notify({Title = "Thành Công!", Content = "Đã dịch chuyển tới: " .. targetPlr.DisplayName, Duration = 3})
+      end
+   else
+      Rayfield:Notify({Title = "Thất Bại", Content = "Không tìm thấy người chơi!", Duration = 3})
+   end
+end
+
+TeleportTab:CreateInput({
+   Name = "Nhập một phần tên người chơi",
+   PlaceholderText = "Ví dụ: noob, gemi...",
+   RemoveTextAfterFocusLost = false,
+   Callback = function(Text) TargetPlayerName = Text end,
+})
+
+TeleportTab:CreateButton({
+   Name = "Dịch Chuyển Theo Tên Vừa Nhập",
+   Callback = function()
+      if TargetPlayerName ~= "" then
+         local p = GetPlayerByString(TargetPlayerName)
+         TeleportToPlayer(p)
+      else
+         Rayfield:Notify({Title = "Lỗi", Content = "Vui lòng nhập tên trước!", Duration = 3})
+      end
+   end,
+})
+
+local PlayerDropdown = TeleportTab:CreateDropdown({
+   Name = "Chọn Người Chơi Trong Phòng",
+   Options = {"Đang tải..."},
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "PlayerDropdown",
+   Callback = function(Option)
+      if Option[1] and Option[1] ~= "" and Option[1] ~= "Đang tải..." then
+         local p = Players:FindFirstChild(Option[1])
+         TeleportToPlayer(p)
+      end
+   end,
+})
+
+local lastCount = 0
+local function UpdateDropdown()
+   local currentPlayers = Players:GetPlayers()
+   if #currentPlayers == lastCount then return end
+   lastCount = #currentPlayers
+
+   local tbl = {}
+   for _, p in pairs(currentPlayers) do
+      if p ~= LocalPlayer then table.insert(tbl, p.Name) end
+   end
+   PlayerDropdown:Refresh(tbl, true)
+end
+
+task.spawn(function()
+   while task.wait(3) do UpdateDropdown() end
+end)
+
+TeleportTab:CreateButton({
+   Name = "Nhận Teleport Tool (Click là dịch chuyển)",
+   Callback = function()
+      local mouse = LocalPlayer:GetMouse()
+      local tool = Instance.new("Tool")
+      tool.Name = "⚡ TP Tool"
+      tool.RequiresHandle = false
+      
+      tool.Activated:Connect(function()
+         if mouse.Target and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.X, mouse.Hit.Y + 3, mouse.Hit.Z)
+         end
+      end)
+      
+      tool.Parent = LocalPlayer.Backpack
+      Rayfield:Notify({Title = "Thành Công!", Content = "Đã thêm TP Tool vào túi đồ!", Duration = 3})
+   end,
+})
+
+Rayfield:Notify({
+   Title = "Cập Nhật Thành Công!",
+   Content = "Đã tối ưu hóa Xung Lực Ghost Fling mới.",
+   Duration = 5,
+   Image = 4483362458,
+})
